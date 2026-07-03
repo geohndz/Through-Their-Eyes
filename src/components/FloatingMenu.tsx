@@ -10,6 +10,7 @@ interface FloatingMenuProps {
   onToggle: () => void
   onSelect: (id: VisionId) => void
   onClose: () => void
+  onInteraction?: () => void
 }
 
 export function FloatingMenu({
@@ -18,6 +19,7 @@ export function FloatingMenu({
   onToggle,
   onSelect,
   onClose,
+  onInteraction,
 }: FloatingMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -37,7 +39,11 @@ export function FloatingMenu({
   }, [open, onClose])
 
   return (
-    <div ref={menuRef} className="fixed bottom-6 right-6 z-10 flex flex-col items-end gap-3">
+    <div
+      ref={menuRef}
+      data-ui-persistent
+      className="fixed bottom-6 right-6 z-10 flex flex-col items-end gap-3"
+    >
       {open && (
         <div
           className="flex min-w-[180px] flex-col gap-1 rounded-3xl border border-white/10 bg-neutral-900/90 p-2 shadow-2xl backdrop-blur-md"
@@ -49,7 +55,10 @@ export function FloatingMenu({
               key={mode.id}
               mode={mode}
               active={mode.id === activeVisionId}
-              onSelect={() => onSelect(mode.id)}
+              onSelect={() => {
+                onInteraction?.()
+                onSelect(mode.id)
+              }}
             />
           ))}
         </div>
@@ -57,7 +66,10 @@ export function FloatingMenu({
 
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => {
+          onInteraction?.()
+          onToggle()
+        }}
         aria-expanded={open}
         aria-label={open ? 'Close vision menu' : 'Open vision menu'}
         className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-neutral-900/90 text-white shadow-2xl backdrop-blur-md transition-transform hover:scale-105 active:scale-95"

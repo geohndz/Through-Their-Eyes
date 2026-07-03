@@ -14,9 +14,15 @@ import { SlideInControl } from './SlideInControl'
 
 interface NarrationSettingsMenuProps {
   narration: UseNarrationResult
+  chromeVisible: boolean
+  onInteraction?: () => void
 }
 
-export function NarrationSettingsMenu({ narration }: NarrationSettingsMenuProps) {
+export function NarrationSettingsMenu({
+  narration,
+  chromeVisible,
+  onInteraction,
+}: NarrationSettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -35,16 +41,25 @@ export function NarrationSettingsMenu({ narration }: NarrationSettingsMenuProps)
   }, [])
 
   const handleToggle = useCallback(() => {
+    onInteraction?.()
     setOpen((isOpen) => !isOpen)
-  }, [])
+  }, [onInteraction])
 
   const handleSpeedSelect = useCallback(() => {
+    onInteraction?.()
     cyclePlaybackRate()
-  }, [cyclePlaybackRate])
+  }, [cyclePlaybackRate, onInteraction])
 
   const handleCaptionsToggle = useCallback(() => {
+    onInteraction?.()
     toggleCaptions()
-  }, [toggleCaptions])
+  }, [onInteraction, toggleCaptions])
+
+  useEffect(() => {
+    if (!chromeVisible) {
+      setOpen(false)
+    }
+  }, [chromeVisible])
 
   useEffect(() => {
     if (!open) {
@@ -62,7 +77,7 @@ export function NarrationSettingsMenu({ narration }: NarrationSettingsMenuProps)
   }, [open, handleClose])
 
   return (
-    <SlideInControl delayMs={120}>
+    <SlideInControl delayMs={120} from="left" className="pointer-events-auto fixed top-6 left-6">
       <div ref={menuRef} className="relative">
         <button
           type="button"
@@ -80,7 +95,7 @@ export function NarrationSettingsMenu({ narration }: NarrationSettingsMenuProps)
 
         <div
           data-open={open}
-          className="menu-drop-down absolute top-full right-0 z-20 mt-3 flex min-w-[280px] flex-col gap-1 rounded-3xl border border-white/10 bg-neutral-900/90 p-2 shadow-2xl backdrop-blur-md"
+          className="menu-drop-down menu-drop-down-left absolute top-full left-0 z-20 mt-3 flex min-w-[280px] flex-col gap-1 rounded-3xl border border-white/10 bg-neutral-900/90 p-2 shadow-2xl backdrop-blur-md"
           role="menu"
           aria-label="Narration settings"
           aria-hidden={!open}

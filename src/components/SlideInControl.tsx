@@ -4,12 +4,20 @@ interface SlideInControlProps {
   children: ReactNode
   delayMs?: number
   className?: string
+  from?: 'left' | 'right'
 }
 
-export function SlideInControl({ children, delayMs = 0, className = '' }: SlideInControlProps) {
+export function SlideInControl({
+  children,
+  delayMs = 0,
+  className = '',
+  from = 'right',
+}: SlideInControlProps) {
+  const animationClass = from === 'left' ? 'animate-slide-in-left' : 'animate-slide-in-right'
+
   return (
     <div
-      className={`animate-slide-in-right ${className}`}
+      className={`${animationClass} ${className}`}
       style={{ animationDelay: `${delayMs}ms` }}
     >
       {children}

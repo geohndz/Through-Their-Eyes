@@ -1,7 +1,6 @@
 import type { UseNarrationResult } from '../hooks/useNarration'
 import { VideoIcon, VideoOffIcon, controlButtonClass } from './icons'
 import { NarrationControls } from './NarrationControls'
-import { NarrationSettingsMenu } from './NarrationSettingsMenu'
 import { SlideInControl } from './SlideInControl'
 
 interface TopRightControlsProps {
@@ -10,6 +9,7 @@ interface TopRightControlsProps {
   onEnableCamera: () => void
   narration: UseNarrationResult
   showNarration: boolean
+  onInteraction?: () => void
 }
 
 export function TopRightControls({
@@ -18,15 +18,25 @@ export function TopRightControls({
   onEnableCamera,
   narration,
   showNarration,
+  onInteraction,
 }: TopRightControlsProps) {
   const showNarrationControls = showNarration && narration.hasNarration
 
+  const handleCameraClick = () => {
+    onInteraction?.()
+    if (cameraEnabled) {
+      onDisableCamera()
+      return
+    }
+    onEnableCamera()
+  }
+
   return (
-    <div className="fixed top-6 right-6 z-10 flex flex-col items-center gap-3">
+    <div className="pointer-events-auto fixed top-6 right-6 flex flex-col items-center gap-3">
       <SlideInControl>
         <button
           type="button"
-          onClick={cameraEnabled ? onDisableCamera : onEnableCamera}
+          onClick={handleCameraClick}
           aria-label={cameraEnabled ? 'Disable camera' : 'Enable camera'}
           className={controlButtonClass}
         >
@@ -34,8 +44,9 @@ export function TopRightControls({
         </button>
       </SlideInControl>
 
-      {showNarrationControls && <NarrationControls narration={narration} />}
-      {showNarrationControls && <NarrationSettingsMenu narration={narration} />}
+      {showNarrationControls && (
+        <NarrationControls narration={narration} onInteraction={onInteraction} />
+      )}
     </div>
   )
 }

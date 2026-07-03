@@ -5,12 +5,15 @@ import { SlideInControl } from './SlideInControl'
 
 interface NarrationControlsProps {
   narration: UseNarrationResult
+  onInteraction?: () => void
 }
 
-export function NarrationControls({ narration }: NarrationControlsProps) {
+export function NarrationControls({ narration, onInteraction }: NarrationControlsProps) {
   const { isFinished, isPlaying, sessionActive, progress, play, pause, replay } = narration
 
   const handlePlaybackClick = () => {
+    onInteraction?.()
+
     if (isFinished) {
       replay()
       return

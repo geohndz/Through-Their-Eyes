@@ -86,13 +86,14 @@ export interface VisionProgram {
 export class WebGLRenderer {
   private gl: WebGLRenderingContext
   private positionBuffer: WebGLBuffer
-  private positionLocation: number
   private texture: WebGLTexture
   private programs: Map<VisionMode['id'], VisionProgram> = new Map()
   private activeProgram: VisionProgram | null = null
   private videoAspect = 16 / 9
   private viewportAspect = 16 / 9
   private mirror = 0
+  private bufferWidth = 0
+  private bufferHeight = 0
 
   constructor(canvas: HTMLCanvasElement, modes: VisionMode[]) {
     const gl = canvas.getContext('webgl', { powerPreference: 'high-performance' })
@@ -145,17 +146,13 @@ export class WebGLRenderer {
       })
     }
 
-    const firstProgram = this.programs.get(modes[0].id)
-    if (!firstProgram) {
-      throw new Error('Failed to initialize vision programs.')
-    }
-
-    this.positionLocation = gl.getAttribLocation(firstProgram.program, 'a_position')
     this.setVisionMode(modes[0].id)
   }
 
   resize(width: number, height: number): void {
     const { gl } = this
+    this.bufferWidth = width
+    this.bufferHeight = height
     this.viewportAspect = width / Math.max(height, 1)
     gl.viewport(0, 0, width, height)
   }
@@ -170,6 +167,7 @@ export class WebGLRenderer {
     if (!program) {
       throw new Error(`Unknown vision mode: ${id}`)
     }
+
     this.activeProgram = program
   }
 
@@ -179,8 +177,10 @@ export class WebGLRenderer {
       return
     }
 
-    gl.useProgram(activeProgram.program)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.bufferWidth, this.bufferHeight)
 
+    gl.useProgram(activeProgram.program)
     gl.uniform1f(activeProgram.videoAspectLocation, this.videoAspect)
     gl.uniform1f(activeProgram.viewportAspectLocation, this.viewportAspect)
     gl.uniform1f(activeProgram.mirrorLocation, this.mirror)
@@ -190,9 +190,10 @@ export class WebGLRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video)
     gl.uniform1i(activeProgram.textureLocation, 0)
 
+    const positionLocation = gl.getAttribLocation(activeProgram.program, 'a_position')
     gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer)
-    gl.enableVertexAttribArray(this.positionLocation)
-    gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 0, 0)
+    gl.enableVertexAttribArray(positionLocation)
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }

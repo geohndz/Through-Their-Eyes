@@ -2,10 +2,13 @@ import { useCallback, useState } from 'react'
 import { logoUrl } from './lib/logo'
 import { Camera } from './components/Camera'
 import { CaptionOverlay } from './components/CaptionOverlay'
+import { ControlsChromeHint } from './components/ControlsChromeHint'
 import { FloatingMenu } from './components/FloatingMenu'
 import { LoadingScreen } from './components/LoadingScreen'
+import { NarrationSettingsMenu } from './components/NarrationSettingsMenu'
 import { TopRightControls } from './components/TopRightControls'
 import { useCamera } from './hooks/useCamera'
+import { useControlsChrome } from './hooks/useControlsChrome'
 import { useNarration } from './hooks/useNarration'
 import { usePageLifecycle } from './hooks/usePageVisibility'
 import type { VisionId } from './types/vision'
@@ -35,11 +38,24 @@ function App() {
     resumeFromBackground: resumeNarrationFromBackground,
   } = narration
 
+  const showCamera = status === 'active' && stream !== null && isVideoReady
+  const showVisionMenu = status === 'active' && stream !== null
+  const cameraIsOn = isCameraEnabled && status === 'active'
+  const chromeEnabled = showVisionMenu && !loading
+
+  const { chromeVisible, revealKey, showChrome, hideChrome, resetIdleTimer } = useControlsChrome({
+    enabled: chromeEnabled,
+    onHide: () => {
+      setMenuOpen(false)
+    },
+  })
+
   const handleBackground = useCallback(() => {
     setMenuOpen(false)
+    hideChrome()
     pauseNarrationForBackground()
     suspendForBackground()
-  }, [pauseNarrationForBackground, suspendForBackground])
+  }, [hideChrome, pauseNarrationForBackground, suspendForBackground])
 
   const handleForeground = useCallback(() => {
     resumeFromBackground()
@@ -48,9 +64,10 @@ function App() {
 
   const handlePageExit = useCallback(() => {
     setMenuOpen(false)
+    hideChrome()
     resetNarration()
     stopAll()
-  }, [resetNarration, stopAll])
+  }, [hideChrome, resetNarration, stopAll])
 
   usePageLifecycle({
     onBackground: handleBackground,
@@ -58,10 +75,14 @@ function App() {
     onPageExit: handlePageExit,
   })
 
-  const handleSelect = useCallback((id: VisionId) => {
-    setVisionId(id)
-    setMenuOpen(false)
-  }, [])
+  const handleSelect = useCallback(
+    (id: VisionId) => {
+      setVisionId(id)
+      setMenuOpen(false)
+      showChrome()
+    },
+    [showChrome],
+  )
 
   const handleClose = useCallback(() => {
     setMenuOpen(false)
@@ -77,9 +98,9 @@ function App() {
     disableCamera()
   }, [disableCamera, resetNarration])
 
-  const showCamera = status === 'active' && stream !== null && isVideoReady
-  const showVisionMenu = status === 'active' && stream !== null
-  const cameraIsOn = isCameraEnabled && status === 'active'
+  const handleRestoreChrome = useCallback(() => {
+    showChrome()
+  }, [showChrome])
 
   return (
     <>
@@ -135,13 +156,63 @@ function App() {
           </div>
         )}
 
-        <TopRightControls
-          cameraEnabled={cameraIsOn}
-          onDisableCamera={handleDisableCamera}
-          onEnableCamera={enableCamera}
-          narration={narration}
-          showNarration={showVisionMenu}
-        />
+        {chromeEnabled && !chromeVisible && (
+          <button
+            type="button"
+            aria-label="Show controls"
+            className="fixed inset-0 z-[5] cursor-default"
+            onClick={handleRestoreChrome}
+          />
+        )}
+
+        <ControlsChromeHint visible={chromeEnabled && !chromeVisible} />
+
+        {chromeEnabled && (
+          <div
+            data-ui-chrome
+            className="controls-chrome pointer-events-none fixed inset-0 z-10"
+            data-visible={chromeVisible}
+          >
+            <TopRightControls
+              key={revealKey}
+              cameraEnabled={cameraIsOn}
+              onDisableCamera={handleDisableCamera}
+              onEnableCamera={enableCamera}
+              narration={narration}
+              showNarration={showVisionMenu}
+              onInteraction={resetIdleTimer}
+            />
+
+            {narration.hasNarration && (
+              <NarrationSettingsMenu
+                key={revealKey}
+                narration={narration}
+                chromeVisible={chromeVisible}
+                onInteraction={resetIdleTimer}
+              />
+            )}
+          </div>
+        )}
+
+        {!chromeEnabled && (
+          <>
+            <TopRightControls
+              cameraEnabled={cameraIsOn}
+              onDisableCamera={handleDisableCamera}
+              onEnableCamera={enableCamera}
+              narration={narration}
+              showNarration={showVisionMenu}
+            />
+
+            {showVisionMenu && narration.hasNarration && (
+              <NarrationSettingsMenu
+                narration={narration}
+                chromeVisible
+                onInteraction={resetIdleTimer}
+              />
+            )}
+          </>
+        )}
 
         <CaptionOverlay
           caption={narration.currentCaption}
@@ -155,6 +226,7 @@ function App() {
             onToggle={handleToggleMenu}
             onSelect={handleSelect}
             onClose={handleClose}
+            onInteraction={resetIdleTimer}
           />
         )}
       </div>
