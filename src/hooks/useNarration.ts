@@ -8,12 +8,17 @@ import {
 } from '../lib/narrationTimeline'
 import { getNarration } from '../narration'
 import type { NarrationSet } from '../types/narration'
+import type { NarrationLocale } from '../types/narration'
 import type { VisionId } from '../types/vision'
 
 type PlaybackState = 'idle' | 'waiting' | 'playing' | 'paused' | 'finished'
 
 const PLAYBACK_RATES = [1, 1.5, 2] as const
 export type NarrationPlaybackRate = (typeof PLAYBACK_RATES)[number]
+
+const LOCALE_LABELS: Record<NarrationLocale, string> = {
+  eng: 'English',
+}
 
 export interface UseNarrationResult {
   sessionActive: boolean
@@ -24,6 +29,8 @@ export interface UseNarrationResult {
   currentCaption: string | null
   captionsEnabled: boolean
   hasNarration: boolean
+  locale: NarrationLocale
+  localeLabel: string
   toggleCaptions: () => void
   cyclePlaybackRate: () => void
   play: () => void
@@ -369,6 +376,8 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
 
   const sessionActive = playbackState !== 'idle'
   const isPlaying = playbackState === 'waiting' || playbackState === 'playing'
+  const locale: NarrationLocale = narrationSet?.locale ?? 'eng'
+  const localeLabel = LOCALE_LABELS[locale]
 
   return {
     sessionActive,
@@ -379,6 +388,8 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     currentCaption,
     captionsEnabled,
     hasNarration: narrationSet !== null,
+    locale,
+    localeLabel,
     toggleCaptions,
     cyclePlaybackRate,
     play,

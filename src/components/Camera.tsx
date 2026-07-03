@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { VisionId } from '../types/vision'
 import { WebGLRenderer } from '../lib/webglRenderer'
+import { getDisplayVideoSize, getViewportMetrics } from '../lib/viewportMetrics'
 import { visionModes } from '../vision'
 
 interface CameraProps {
@@ -16,6 +17,15 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
   const visionIdRef = useRef(visionId)
   const mirrorVideoRef = useRef(mirrorVideo)
   const [renderError, setRenderError] = useState<string | null>(null)
+  const [viewportStyle, setViewportStyle] = useState(() => {
+    const metrics = getViewportMetrics()
+    return {
+      left: metrics.offsetLeft,
+      top: metrics.offsetTop,
+      width: metrics.width,
+      height: metrics.height,
+    }
+  })
 
   useEffect(() => {
     visionIdRef.current = visionId
@@ -44,22 +54,55 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
     }
 
     const resize = () => {
-      const width = window.innerWidth
-      const height = window.innerHeight
-      canvas.width = width
-      canvas.height = height
-      renderer.resize(width, height)
+      const metrics = getViewportMetrics()
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const bufferWidth = Math.round(metrics.width * dpr)
+      const bufferHeight = Math.round(metrics.height * dpr)
+
+      canvas.width = bufferWidth
+      canvas.height = bufferHeight
+      canvas.style.left = `${metrics.offsetLeft}px`
+      canvas.style.top = `${metrics.offsetTop}px`
+      canvas.style.width = `${metrics.width}px`
+      canvas.style.height = `${metrics.height}px`
+
+      setViewportStyle({
+        left: metrics.offsetLeft,
+        top: metrics.offsetTop,
+        width: metrics.width,
+        height: metrics.height,
+      })
+
+      renderer.resize(bufferWidth, bufferHeight)
+    }
+
+    const handleResize = () => {
+      resize()
+    }
+
+    const handleOrientationChange = () => {
+      requestAnimationFrame(() => {
+        resize()
+        requestAnimationFrame(resize)
+      })
     }
 
     resize()
-    window.addEventListener('resize', resize)
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleOrientationChange)
+    window.visualViewport?.addEventListener('resize', handleResize)
+    window.visualViewport?.addEventListener('scroll', handleResize)
+
+    const video = videoRef.current
+    video?.addEventListener('resize', handleResize)
 
     let frameId = 0
     const renderFrame = () => {
-      const video = videoRef.current
-      if (video && video.videoWidth > 0) {
-        renderer.setVideoMetrics(video.videoWidth, video.videoHeight, mirrorVideoRef.current)
-        renderer.render(video)
+      const currentVideo = videoRef.current
+      if (currentVideo && currentVideo.videoWidth > 0) {
+        const { width, height } = getDisplayVideoSize(currentVideo)
+        renderer.setVideoMetrics(width, height, mirrorVideoRef.current)
+        renderer.render(currentVideo)
       }
       frameId = requestAnimationFrame(renderFrame)
     }
@@ -67,7 +110,11 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
     frameId = requestAnimationFrame(renderFrame)
 
     return () => {
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleOrientationChange)
+      window.visualViewport?.removeEventListener('resize', handleResize)
+      window.visualViewport?.removeEventListener('scroll', handleResize)
+      video?.removeEventListener('resize', handleResize)
       cancelAnimationFrame(frameId)
       renderer.dispose()
       rendererRef.current = null
@@ -85,7 +132,13 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 h-full w-full"
+      className="fixed touch-none"
+      style={{
+        left: viewportStyle.left,
+        top: viewportStyle.top,
+        width: viewportStyle.width,
+        height: viewportStyle.height,
+      }}
     />
   )
 }

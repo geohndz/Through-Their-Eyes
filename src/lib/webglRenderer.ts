@@ -179,10 +179,6 @@ export class WebGLRenderer {
       return
     }
 
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      this.videoAspect = video.videoWidth / video.videoHeight
-    }
-
     gl.useProgram(activeProgram.program)
 
     gl.uniform1f(activeProgram.videoAspectLocation, this.videoAspect)

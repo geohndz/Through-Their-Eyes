@@ -1,6 +1,7 @@
 import type { UseNarrationResult } from '../hooks/useNarration'
 import { VideoIcon, VideoOffIcon, controlButtonClass } from './icons'
 import { NarrationControls } from './NarrationControls'
+import { NarrationSettingsMenu } from './NarrationSettingsMenu'
 import { SlideInControl } from './SlideInControl'
 
 interface TopRightControlsProps {
@@ -33,9 +34,8 @@ export function TopRightControls({
         </button>
       </SlideInControl>
 
-      {showNarrationControls && (
-        <NarrationControls narration={narration} />
-      )}
+      {showNarrationControls && <NarrationControls narration={narration} />}
+      {showNarrationControls && <NarrationSettingsMenu narration={narration} />}
     </div>
   )
 }
