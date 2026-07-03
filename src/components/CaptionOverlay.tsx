@@ -1,0 +1,20 @@
+interface CaptionOverlayProps {
+  caption: string | null
+  visible: boolean
+}
+
+export function CaptionOverlay({ caption, visible }: CaptionOverlayProps) {
+  if (!visible || !caption) {
+    return null
+  }
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed bottom-8 left-1/2 z-10 max-w-lg -translate-x-1/2 rounded-2xl bg-black/70 px-5 py-3 text-center text-sm leading-relaxed text-white backdrop-blur-sm"
+    >
+      {caption}
+    </div>
+  )
+}
