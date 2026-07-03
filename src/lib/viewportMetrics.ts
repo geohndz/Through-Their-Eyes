@@ -1,19 +1,29 @@
 export interface ViewportMetrics {
   width: number
   height: number
-  offsetLeft: number
-  offsetTop: number
 }
 
 export function getViewportMetrics(): ViewportMetrics {
+  const innerWidth = window.innerWidth
+  const innerHeight = window.innerHeight
   const visualViewport = window.visualViewport
+  const visualWidth = visualViewport?.width ?? innerWidth
+  const visualHeight = visualViewport?.height ?? innerHeight
 
-  return {
-    width: visualViewport?.width ?? window.innerWidth,
-    height: visualViewport?.height ?? window.innerHeight,
-    offsetLeft: visualViewport?.offsetLeft ?? 0,
-    offsetTop: visualViewport?.offsetTop ?? 0,
+  let width = Math.max(innerWidth, visualWidth)
+  let height = Math.max(innerHeight, visualHeight)
+
+  const landscapeQuery = window.matchMedia('(orientation: landscape)').matches
+  const portraitQuery = window.matchMedia('(orientation: portrait)').matches
+
+  // Mobile Safari can keep portrait-width layout metrics in landscape.
+  if (landscapeQuery && width < height) {
+    ;[width, height] = [height, width]
+  } else if (portraitQuery && width > height) {
+    ;[width, height] = [height, width]
   }
+
+  return { width, height }
 }
 
 export function getDisplayVideoSize(video: HTMLVideoElement): { width: number; height: number } {

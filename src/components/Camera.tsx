@@ -17,15 +17,6 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
   const visionIdRef = useRef(visionId)
   const mirrorVideoRef = useRef(mirrorVideo)
   const [renderError, setRenderError] = useState<string | null>(null)
-  const [viewportStyle, setViewportStyle] = useState(() => {
-    const metrics = getViewportMetrics()
-    return {
-      left: metrics.offsetLeft,
-      top: metrics.offsetTop,
-      width: metrics.width,
-      height: metrics.height,
-    }
-  })
 
   useEffect(() => {
     visionIdRef.current = visionId
@@ -54,25 +45,13 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
     }
 
     const resize = () => {
-      const metrics = getViewportMetrics()
+      const { width, height } = getViewportMetrics()
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
-      const bufferWidth = Math.round(metrics.width * dpr)
-      const bufferHeight = Math.round(metrics.height * dpr)
+      const bufferWidth = Math.round(width * dpr)
+      const bufferHeight = Math.round(height * dpr)
 
       canvas.width = bufferWidth
       canvas.height = bufferHeight
-      canvas.style.left = `${metrics.offsetLeft}px`
-      canvas.style.top = `${metrics.offsetTop}px`
-      canvas.style.width = `${metrics.width}px`
-      canvas.style.height = `${metrics.height}px`
-
-      setViewportStyle({
-        left: metrics.offsetLeft,
-        top: metrics.offsetTop,
-        width: metrics.width,
-        height: metrics.height,
-      })
-
       renderer.resize(bufferWidth, bufferHeight)
     }
 
@@ -91,7 +70,6 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
     window.addEventListener('resize', handleResize)
     window.addEventListener('orientationchange', handleOrientationChange)
     window.visualViewport?.addEventListener('resize', handleResize)
-    window.visualViewport?.addEventListener('scroll', handleResize)
 
     const video = videoRef.current
     video?.addEventListener('resize', handleResize)
@@ -113,7 +91,6 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('orientationchange', handleOrientationChange)
       window.visualViewport?.removeEventListener('resize', handleResize)
-      window.visualViewport?.removeEventListener('scroll', handleResize)
       video?.removeEventListener('resize', handleResize)
       cancelAnimationFrame(frameId)
       renderer.dispose()
@@ -129,16 +106,5 @@ export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProp
     )
   }
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="fixed touch-none"
-      style={{
-        left: viewportStyle.left,
-        top: viewportStyle.top,
-        width: viewportStyle.width,
-        height: viewportStyle.height,
-      }}
-    />
-  )
+  return <canvas ref={canvasRef} className="fixed inset-0 h-full w-full touch-none" />
 }

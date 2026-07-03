@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { getActiveCueText, buildProportionalCues, splitIntoSentences } from '../lib/captions'
 import type { CaptionCue } from '../lib/captions'
 import {
@@ -37,6 +37,8 @@ export interface UseNarrationResult {
   pause: () => void
   replay: () => void
   reset: () => void
+  pauseForBackground: () => void
+  resumeFromBackground: () => void
 }
 
 export function useNarration(visionId: VisionId): UseNarrationResult {
@@ -61,6 +63,9 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
   const isWaitingRef = useRef(false)
   const playbackStateRef = useRef<PlaybackState>('idle')
   const playbackRateRef = useRef<NarrationPlaybackRate>(1)
+  const wasPlayingBeforeBackgroundRef = useRef(false)
+  const previousVisionIdRef = useRef(visionId)
+  const timelineBuildPromiseRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     playbackRateRef.current = playbackRate
@@ -98,6 +103,37 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     updateProgress()
   }, [updateProgress])
 
+  const syncProgressFromAudio = useCallback(() => {
+    updateProgress()
+  }, [updateProgress])
+
+  const ensureTimelineReady = useCallback((): Promise<void> => {
+    const narration = narrationRef.current
+    if (!narration) {
+      return Promise.resolve()
+    }
+
+    if (totalDurationMsRef.current > 0) {
+      return Promise.resolve()
+    }
+
+    if (timelineBuildPromiseRef.current) {
+      return timelineBuildPromiseRef.current
+    }
+
+    timelineBuildPromiseRef.current = buildNarrationTimeline(narration)
+      .then(({ segments, totalDurationMs }) => {
+        timelineRef.current = segments
+        totalDurationMsRef.current = totalDurationMs
+        updateProgress()
+      })
+      .finally(() => {
+        timelineBuildPromiseRef.current = null
+      })
+
+    return timelineBuildPromiseRef.current
+  }, [updateProgress])
+
   const clearWaitTimeout = useCallback(() => {
     if (waitTimeoutRef.current !== null) {
       window.clearTimeout(waitTimeoutRef.current)
@@ -106,12 +142,13 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     isWaitingRef.current = false
   }, [])
 
-  const detachCaptionSync = useCallback(
+  const detachAudioSync = useCallback(
     (audio: HTMLAudioElement) => {
       audio.removeEventListener('timeupdate', syncCaptionToCurrentTime)
+      audio.removeEventListener('timeupdate', syncProgressFromAudio)
       currentCuesRef.current = []
     },
-    [syncCaptionToCurrentTime],
+    [syncCaptionToCurrentTime, syncProgressFromAudio],
   )
 
   const stopAudio = useCallback(() => {
@@ -119,11 +156,11 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     if (!audio) {
       return
     }
-    detachCaptionSync(audio)
+    detachAudioSync(audio)
     audio.pause()
     audio.removeAttribute('src')
     audio.load()
-  }, [detachCaptionSync])
+  }, [detachAudioSync])
 
   const attachCaptionSync = useCallback(
     (audio: HTMLAudioElement, cues: CaptionCue[]) => {
@@ -142,6 +179,10 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     pendingTrackIndexRef.current = 0
     segmentIndexRef.current = 0
     waitRemainingRef.current = 0
+    wasPlayingBeforeBackgroundRef.current = false
+    timelineRef.current = []
+    totalDurationMsRef.current = 0
+    timelineBuildPromiseRef.current = null
     setPlaybackState('idle')
     setCurrentCaption(null)
     setProgress(0)
@@ -172,6 +213,8 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
       audio.src = track.src
       audio.currentTime = 0
       audio.playbackRate = playbackRateRef.current
+      audio.removeEventListener('timeupdate', syncProgressFromAudio)
+      audio.addEventListener('timeupdate', syncProgressFromAudio)
 
       const handleLoadedMetadata = () => {
         audio?.removeEventListener('loadedmetadata', handleLoadedMetadata)
@@ -186,7 +229,7 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
       const handleEnded = () => {
         audio?.removeEventListener('ended', handleEnded)
         if (audio) {
-          detachCaptionSync(audio)
+          detachAudioSync(audio)
         }
 
         const nextIndex = index + 1
@@ -220,17 +263,17 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
         audio?.removeEventListener('loadedmetadata', handleLoadedMetadata)
         audio?.removeEventListener('ended', handleEnded)
         if (audio) {
-          detachCaptionSync(audio)
+          detachAudioSync(audio)
         }
         setPlaybackState('idle')
         setCurrentCaption(null)
         setProgress(0)
       })
     },
-    [attachCaptionSync, detachCaptionSync, updateProgress],
+    [attachCaptionSync, detachAudioSync, syncProgressFromAudio, updateProgress],
   )
 
-  const startSequence = useCallback(() => {
+  const beginSequence = useCallback(() => {
     const narration = narrationRef.current
     if (!narration || narration.tracks.length === 0) {
       return
@@ -256,6 +299,12 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
       playTrack(0)
     }, firstTrack.delayBeforeMs)
   }, [clearWaitTimeout, playTrack, stopAudio, updateProgress])
+
+  const startSequence = useCallback(() => {
+    void ensureTimelineReady().then(() => {
+      beginSequence()
+    })
+  }, [beginSequence, ensureTimelineReady])
 
   const play = useCallback(() => {
     if (!narrationRef.current) {
@@ -328,29 +377,44 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     })
   }, [])
 
-  useEffect(() => {
+  const pauseForBackground = useCallback(() => {
+    wasPlayingBeforeBackgroundRef.current =
+      playbackStateRef.current === 'waiting' || playbackStateRef.current === 'playing'
+    pause()
+  }, [pause])
+
+  const resumeFromBackground = useCallback(() => {
+    if (!wasPlayingBeforeBackgroundRef.current) {
+      return
+    }
+
+    wasPlayingBeforeBackgroundRef.current = false
+    play()
+  }, [play])
+
+  useLayoutEffect(() => {
+    const visionChanged = previousVisionIdRef.current !== visionId
+    previousVisionIdRef.current = visionId
+
     narrationRef.current = narrationSet
     reset()
 
     if (!narrationSet) {
-      timelineRef.current = []
-      totalDurationMsRef.current = 0
       return
     }
 
     let cancelled = false
-    void buildNarrationTimeline(narrationSet).then(({ segments, totalDurationMs }) => {
-      if (cancelled) {
+    void ensureTimelineReady().then(() => {
+      if (cancelled || !visionChanged) {
         return
       }
-      timelineRef.current = segments
-      totalDurationMsRef.current = totalDurationMs
+      beginSequence()
     })
 
     return () => {
       cancelled = true
     }
-  }, [narrationSet, visionId, reset])
+  }, [narrationSet, visionId, reset, beginSequence, ensureTimelineReady])
 
   useEffect(() => {
     if (playbackState !== 'waiting' && playbackState !== 'playing') {
@@ -364,7 +428,12 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     }
 
     frameId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frameId)
+    const intervalId = window.setInterval(updateProgress, 250)
+
+    return () => {
+      cancelAnimationFrame(frameId)
+      window.clearInterval(intervalId)
+    }
   }, [playbackState, updateProgress])
 
   useEffect(() => {
@@ -396,5 +465,7 @@ export function useNarration(visionId: VisionId): UseNarrationResult {
     pause,
     replay,
     reset,
+    pauseForBackground,
+    resumeFromBackground,
   }
 }

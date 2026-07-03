@@ -60,7 +60,6 @@ export function ProgressRingButton({
               strokeLinecap="round"
               strokeDasharray={CIRCUMFERENCE}
               strokeDashoffset={dashOffset}
-              className="transition-[stroke-dashoffset] duration-100 ease-linear"
             />
           </g>
         </svg>

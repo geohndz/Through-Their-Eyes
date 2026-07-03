@@ -19,6 +19,9 @@ interface UseCameraResult {
   mirrorVideo: boolean
   disableCamera: () => void
   enableCamera: () => void
+  suspendForBackground: () => void
+  resumeFromBackground: () => void
+  stopAll: () => void
 }
 
 export function useCamera(): UseCameraResult {
@@ -31,6 +34,7 @@ export function useCamera(): UseCameraResult {
   const [mirrorVideo, setMirrorVideo] = useState(true)
   const [shouldStart, setShouldStart] = useState(true)
   const [startSignal, setStartSignal] = useState(0)
+  const wasRunningBeforeBackgroundRef = useRef(false)
 
   const stopTracks = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -51,6 +55,33 @@ export function useCamera(): UseCameraResult {
     setShouldStart(true)
     setStartSignal((count) => count + 1)
   }, [])
+
+  const suspendForBackground = useCallback(() => {
+    if (!shouldStart || status === 'disabled') {
+      return
+    }
+
+    if (streamRef.current || status === 'active' || status === 'requesting') {
+      wasRunningBeforeBackgroundRef.current = true
+      videoRef.current?.pause()
+      stopTracks()
+      setStatus('idle')
+    }
+  }, [shouldStart, status, stopTracks])
+
+  const resumeFromBackground = useCallback(() => {
+    if (!shouldStart || status === 'disabled' || !wasRunningBeforeBackgroundRef.current) {
+      return
+    }
+
+    wasRunningBeforeBackgroundRef.current = false
+    setStartSignal((count) => count + 1)
+  }, [shouldStart, status])
+
+  const stopAll = useCallback(() => {
+    wasRunningBeforeBackgroundRef.current = false
+    stopTracks()
+  }, [stopTracks])
 
   useEffect(() => {
     if (!shouldStart) {
@@ -161,5 +192,8 @@ export function useCamera(): UseCameraResult {
     mirrorVideo,
     disableCamera,
     enableCamera,
+    suspendForBackground,
+    resumeFromBackground,
+    stopAll,
   }
 }
