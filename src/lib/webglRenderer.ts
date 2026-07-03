@@ -2,12 +2,27 @@ import type { VisionMode } from '../types/vision'
 
 const VERTEX_SHADER = `
   attribute vec2 a_position;
+  uniform float u_videoAspect;
+  uniform float u_viewportAspect;
+  uniform float u_mirror;
   varying vec2 v_uv;
 
   void main() {
     v_uv = a_position * 0.5 + 0.5;
-    v_uv.x = 1.0 - v_uv.x;
     v_uv.y = 1.0 - v_uv.y;
+
+    if (u_mirror > 0.5) {
+      v_uv.x = 1.0 - v_uv.x;
+    }
+
+    if (u_videoAspect > u_viewportAspect) {
+      float scale = u_viewportAspect / u_videoAspect;
+      v_uv.x = v_uv.x * scale + (1.0 - scale) * 0.5;
+    } else {
+      float scale = u_videoAspect / u_viewportAspect;
+      v_uv.y = v_uv.y * scale + (1.0 - scale) * 0.5;
+    }
+
     gl_Position = vec4(a_position, 0.0, 1.0);
   }
 `
@@ -63,6 +78,9 @@ export interface VisionProgram {
   id: VisionMode['id']
   program: WebGLProgram
   textureLocation: WebGLUniformLocation
+  videoAspectLocation: WebGLUniformLocation
+  viewportAspectLocation: WebGLUniformLocation
+  mirrorLocation: WebGLUniformLocation
 }
 
 export class WebGLRenderer {
@@ -72,6 +90,9 @@ export class WebGLRenderer {
   private texture: WebGLTexture
   private programs: Map<VisionMode['id'], VisionProgram> = new Map()
   private activeProgram: VisionProgram | null = null
+  private videoAspect = 16 / 9
+  private viewportAspect = 16 / 9
+  private mirror = 0
 
   constructor(canvas: HTMLCanvasElement, modes: VisionMode[]) {
     const gl = canvas.getContext('webgl', { powerPreference: 'high-performance' })
@@ -106,14 +127,21 @@ export class WebGLRenderer {
     for (const mode of modes) {
       const program = createProgram(gl, VERTEX_SHADER, mode.fragmentShader)
       const textureLocation = gl.getUniformLocation(program, 'u_texture')
-      if (!textureLocation) {
-        throw new Error(`Missing u_texture uniform for ${mode.id}.`)
+      const videoAspectLocation = gl.getUniformLocation(program, 'u_videoAspect')
+      const viewportAspectLocation = gl.getUniformLocation(program, 'u_viewportAspect')
+      const mirrorLocation = gl.getUniformLocation(program, 'u_mirror')
+
+      if (!textureLocation || !videoAspectLocation || !viewportAspectLocation || !mirrorLocation) {
+        throw new Error(`Missing shader uniforms for ${mode.id}.`)
       }
 
       this.programs.set(mode.id, {
         id: mode.id,
         program,
         textureLocation,
+        videoAspectLocation,
+        viewportAspectLocation,
+        mirrorLocation,
       })
     }
 
@@ -128,7 +156,13 @@ export class WebGLRenderer {
 
   resize(width: number, height: number): void {
     const { gl } = this
+    this.viewportAspect = width / Math.max(height, 1)
     gl.viewport(0, 0, width, height)
+  }
+
+  setVideoMetrics(videoWidth: number, videoHeight: number, mirror: boolean): void {
+    this.videoAspect = videoWidth / Math.max(videoHeight, 1)
+    this.mirror = mirror ? 1 : 0
   }
 
   setVisionMode(id: VisionMode['id']): void {
@@ -145,7 +179,15 @@ export class WebGLRenderer {
       return
     }
 
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      this.videoAspect = video.videoWidth / video.videoHeight
+    }
+
     gl.useProgram(activeProgram.program)
+
+    gl.uniform1f(activeProgram.videoAspectLocation, this.videoAspect)
+    gl.uniform1f(activeProgram.viewportAspectLocation, this.viewportAspect)
+    gl.uniform1f(activeProgram.mirrorLocation, this.mirror)
 
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.texture)

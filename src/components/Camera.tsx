@@ -6,19 +6,25 @@ import { visionModes } from '../vision'
 interface CameraProps {
   videoRef: React.RefObject<HTMLVideoElement | null>
   visionId: VisionId
+  mirrorVideo: boolean
   isActive: boolean
 }
 
-export function Camera({ videoRef, visionId, isActive }: CameraProps) {
+export function Camera({ videoRef, visionId, mirrorVideo, isActive }: CameraProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<WebGLRenderer | null>(null)
   const visionIdRef = useRef(visionId)
+  const mirrorVideoRef = useRef(mirrorVideo)
   const [renderError, setRenderError] = useState<string | null>(null)
 
   useEffect(() => {
     visionIdRef.current = visionId
     rendererRef.current?.setVisionMode(visionId)
   }, [visionId])
+
+  useEffect(() => {
+    mirrorVideoRef.current = mirrorVideo
+  }, [mirrorVideo])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -52,6 +58,7 @@ export function Camera({ videoRef, visionId, isActive }: CameraProps) {
     const renderFrame = () => {
       const video = videoRef.current
       if (video && video.videoWidth > 0) {
+        renderer.setVideoMetrics(video.videoWidth, video.videoHeight, mirrorVideoRef.current)
         renderer.render(video)
       }
       frameId = requestAnimationFrame(renderFrame)
@@ -78,7 +85,7 @@ export function Camera({ videoRef, visionId, isActive }: CameraProps) {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 h-full w-full object-cover"
+      className="fixed inset-0 h-full w-full"
     />
   )
 }

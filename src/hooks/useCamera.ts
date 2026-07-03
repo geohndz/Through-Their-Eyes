@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { requestCameraStream, shouldMirrorVideo } from '../lib/cameraStream'
 
 export type CameraStatus =
   | 'idle'
@@ -15,6 +16,7 @@ interface UseCameraResult {
   error: string | null
   isVideoReady: boolean
   isCameraEnabled: boolean
+  mirrorVideo: boolean
   disableCamera: () => void
   enableCamera: () => void
 }
@@ -26,6 +28,7 @@ export function useCamera(): UseCameraResult {
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [isVideoReady, setIsVideoReady] = useState(false)
+  const [mirrorVideo, setMirrorVideo] = useState(true)
   const [shouldStart, setShouldStart] = useState(true)
   const [startSignal, setStartSignal] = useState(0)
 
@@ -68,14 +71,7 @@ export function useCamera(): UseCameraResult {
       setIsVideoReady(false)
 
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        })
+        const { stream: mediaStream, facingMode } = await requestCameraStream()
 
         if (cancelled) {
           mediaStream.getTracks().forEach((track) => track.stop())
@@ -83,6 +79,7 @@ export function useCamera(): UseCameraResult {
         }
 
         streamRef.current = mediaStream
+        setMirrorVideo(shouldMirrorVideo(facingMode))
         setStream(mediaStream)
         setStatus('active')
       } catch (err) {
@@ -161,6 +158,7 @@ export function useCamera(): UseCameraResult {
     error,
     isVideoReady,
     isCameraEnabled,
+    mirrorVideo,
     disableCamera,
     enableCamera,
   }

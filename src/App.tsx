@@ -15,6 +15,7 @@ function App() {
     error,
     isVideoReady,
     isCameraEnabled,
+    mirrorVideo,
     disableCamera,
     enableCamera,
   } = useCamera()
@@ -57,7 +58,12 @@ function App() {
       />
 
       {showCamera && (
-        <Camera videoRef={videoRef} visionId={visionId} isActive />
+        <Camera
+          videoRef={videoRef}
+          visionId={visionId}
+          mirrorVideo={mirrorVideo}
+          isActive
+        />
       )}
 
       {isCameraEnabled && status === 'active' && stream !== null && !isVideoReady && (
